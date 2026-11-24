@@ -8,7 +8,7 @@ A plugin for [Orca](https://github.com/stablyai/orca) that lists your GitHub pul
 
 *All screenshots show fictional data.*
 
-## What it does
+## Features
 
 - Groups your open pull requests from every repository into **Fix**, **Todo**, **Waiting** and **Merge**.
 - Lists the reviews requested from you, and the reviews you are waiting on the author for, in a second tab.
@@ -64,7 +64,7 @@ This first run installs nothing. It prints the access the plugin asks for and a 
 
 Press the bell icon at the top of the right sidebar.
 
-<img src="docs/images/sidebar-icon.png" width="478" alt="The right sidebar with the bell icon selected and the PRs panel open">
+<img src="docs/images/sidebar-icon.png" width="254" alt="The bell icon, selected, at the top of the right sidebar">
 
 The first load takes a few seconds.
 
@@ -200,6 +200,11 @@ npm run check              # types, lint, manifest, tests and panel checks
 | `src/github.ts` | Search queries and reading the answers |
 | `src/classify.ts` | Decides the state and the reason. Examples are in `src/classify.test.ts` |
 | `src/gh.ts` | Runs `gh` |
+| `src/text.ts` | Trims text to one line |
 | `fixtures/` | Stand-ins for `gh` used by tests and checks. They do not contact GitHub |
 
 Text in the panel is English. Comments in the code are Japanese.
+
+## License
+
+[MIT](LICENSE)
