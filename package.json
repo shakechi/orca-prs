@@ -1,0 +1,21 @@
+{
+  "name": "orca-prs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orca のプラグイン。自分の PR と、自分に来ているレビュー依頼を、状態ごとにサイドバーへ出す",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p .",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "orca plugin test . --json",
+    "validate": "orca plugin validate . --json",
+    "plugin-check": "orca plugin check . --json",
+    "check": "npm run typecheck && npm run lint && npm run validate && npm test && npm run plugin-check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "typescript": "7.0.2"
+  }
+}
