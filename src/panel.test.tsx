@@ -85,6 +85,15 @@ test('はじめは自分の PR を、状態ごとに出す', async () => {
   await close()
 })
 
+test('直すものを一番上に出す', async () => {
+  const { view, close } = await open()
+  assert.deepEqual(
+    view.findAll({ type: 'List' }).map((list) => list.label),
+    ['Fix', 'Todo', 'Waiting', 'Merge'],
+  )
+  await close()
+})
+
 test('状態は、空でも出す', async () => {
   const { shows, close } = await open(ready({ mine: [], reviews: [] }))
   for (const label of ['Todo', 'Waiting', 'Fix', 'Merge']) assert.ok(shows(label), label)

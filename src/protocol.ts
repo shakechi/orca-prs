@@ -1,7 +1,7 @@
 // パネルとワーカーの間の約束。両方がこのファイルを読む。
 
-/** 自分の PR の状態。並べる順。 */
-export const MINE_STATES = ['todo', 'waiting', 'fix', 'merge'] as const
+/** 自分の PR の状態。並べる順。Todo がたまっても、直すものが下に隠れないようにする。 */
+export const MINE_STATES = ['fix', 'todo', 'waiting', 'merge'] as const
 export type MineState = (typeof MINE_STATES)[number]
 
 /** 自分に来ているレビュー依頼の状態。並べる順。 */
