@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "description": "Shows your pull requests and the reviews requested from you, grouped by what they are waiting for.",
   "engines": {
-    "orca": ">=1.4.246"
+    "orca": ">=1.4.247"
   },
   "execution": "sandboxed-ui",
   "pluginApi": 1,
