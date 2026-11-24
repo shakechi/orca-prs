@@ -6,6 +6,7 @@ import { type Collected, collect } from './collect.ts'
 import { createGh, type GitHub } from './gh.ts'
 import { parseTargets } from './github.ts'
 import type { PrsState } from './protocol.ts'
+import { toOneLine } from './text.ts'
 
 /** 利用者に見せる説明の長さの上限。 */
 const MESSAGE_MAX = 300
@@ -36,13 +37,8 @@ export interface WorkerOptions {
   settleMs?: number
 }
 
-function shorten(text: string): string {
-  const flat = text.replace(/\s+/g, ' ').trim()
-  return flat.length > MESSAGE_MAX ? `${flat.slice(0, MESSAGE_MAX - 1)}…` : flat
-}
-
 const messageOf = (error: unknown) =>
-  shorten(error instanceof Error ? error.message : String(error))
+  toOneLine(error instanceof Error ? error.message : String(error), MESSAGE_MAX)
 
 export function createWorker(
   orca: OrcaWorkerApi,
@@ -101,7 +97,7 @@ export function createWorker(
       ...found,
       status: 'ready',
       problem: null,
-      warning: warnings.length > 0 ? shorten(warnings.join('. ')) : null,
+      warning: warnings.length > 0 ? toOneLine(warnings.join('. '), MESSAGE_MAX) : null,
       fetchedAt: Date.now(),
     })
     return unsettled

@@ -2,9 +2,10 @@
 // 応答の形を信じない。知らない形の PR は、読めなかったものとして数える。
 
 import type { PullRequest, Review, Reviewer } from './classify.ts'
+import { toOneLine } from './text.ts'
 
 export const PAGE_SIZE = 50
-/** 題の長さの上限（文字）。 */
+/** 題の長さの上限（文字）。数百行をまとめて送るため。 */
 const TITLE_MAX = 120
 
 export const QUERY = `query($q: String!, $after: String) {
@@ -53,13 +54,6 @@ const nodesOf = (value: unknown): Json[] => listOf(objectOf(value).nodes)
 function complete(value: unknown): boolean {
   const { nodes, totalCount } = objectOf(value)
   return Array.isArray(nodes) && typeof totalCount === 'number' && totalCount <= nodes.length
-}
-
-/** 題。改行や見えない文字を入れず、長すぎるものは切る（数百行をまとめて送るため）。 */
-function titleOf(value: unknown): string {
-  const flat = (stringOf(value) ?? '').replace(/[\s\p{Cc}]+/gu, ' ').trim()
-  const letters = [...flat]
-  return letters.length > TITLE_MAX ? `${letters.slice(0, TITLE_MAX - 1).join('')}…` : flat
 }
 
 function reviewStateOf(value: unknown): Review['state'] | null {
@@ -151,7 +145,7 @@ export function pullRequestOf(node: Json, failed = false): PullRequest | null {
     id,
     number: node.number,
     url,
-    title: titleOf(node.title),
+    title: toOneLine(stringOf(node.title) ?? '', TITLE_MAX),
     branch: stringOf(node.headRefName),
     owner,
     repo,
