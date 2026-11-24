@@ -202,3 +202,21 @@ test('設定が変わったら、前の設定で取ったものを捨てて取�
   assert.equal(fake.disposes, 1)
   await mounted.deactivate()
 })
+
+test('大きすぎる結果は送らず、頼まれた答えで返す', async () => {
+  let page = 0
+  const nodes = () => {
+    page += 1
+    return Array.from({ length: 50 }, (_, i) =>
+      prNode(`${'o'.repeat(39)}/${'r'.repeat(100)}#${page * 100 + i}`, { title: '題'.repeat(120) }),
+    )
+  }
+  const { mounted, refresh, states } = await start({
+    reply: () => answer(nodes(), { total: 999, next: `C${page}` }),
+  })
+  const state = await refresh()
+  assert.equal(state.status, 'ready')
+  assert.equal(state.mine.length, 200)
+  assert.ok(states().every((posted) => posted.status === 'starting'))
+  await mounted.deactivate()
+})

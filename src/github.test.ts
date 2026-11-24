@@ -5,6 +5,7 @@ import { parsePage, parseTargets, pullRequestOf, searchesFor } from './github.ts
 test('応答の 1 件から、判定に使うものを取り出す', () => {
   const pr = pullRequestOf(
     prNode('acme/api#482', {
+      title: '再試行の待ち時間を直す',
       isDraft: true,
       updatedAt: '2026-11-24T00:00:00Z',
       mergeable: 'CONFLICTING',
@@ -30,6 +31,7 @@ test('応答の 1 件から、判定に使うものを取り出す', () => {
     id: 'PR_acme/api#482',
     number: 482,
     url: 'https://github.com/acme/api/pull/482',
+    title: '再試行の待ち時間を直す',
     owner: 'acme',
     repo: 'api',
     draft: true,
@@ -108,6 +110,14 @@ test('GitHub が一部を読めなかった PR だけを、読み切れていな
     page.prs.map((pr) => pr.incomplete),
     [false, true, false],
   )
+})
+
+test('題は 1 行にし、長すぎれば切る', () => {
+  const of = (title: unknown) => pullRequestOf(prNode('a/b#1', { title }))?.title
+  assert.equal(of('  a\n\tb\u0007c '), 'a b c')
+  assert.equal(of('あ'.repeat(120)), 'あ'.repeat(120))
+  assert.equal(of('😀'.repeat(121)), `${'😀'.repeat(119)}…`)
+  assert.equal(of(null), '')
 })
 
 test('行にできない形は読まない', () => {

@@ -12,6 +12,9 @@ const MESSAGE_MAX = 300
 /** コンフリクトの計算が終わっていないときに、1 回だけ聞き直すまでの待ち時間（ミリ秒）。 */
 const DEFAULT_SETTLE_MS = 4000
 
+/** パネルに一度に送れる大きさ（Orca の上限は 256 KiB）。 */
+const POST_MAX_BYTES = 240 * 1024
+
 const STARTING: PrsState = {
   status: 'starting',
   problem: null,
@@ -58,6 +61,8 @@ export function createWorker(
 
   const publish = (next: Partial<PrsState>) => {
     state = { ...state, ...next }
+    // 大きすぎるときは送らない。パネルは prs.refresh の答え（上限 1 MiB）でも受け取る
+    if (Buffer.byteLength(JSON.stringify(state)) > POST_MAX_BYTES) return
     orca.panels.post('prs.changed', state)
   }
 

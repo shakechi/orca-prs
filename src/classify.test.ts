@@ -13,6 +13,7 @@ function pr(overrides: Partial<PullRequest> = {}): PullRequest {
     id: 'PR_1',
     number: 1,
     url: 'https://github.com/acme/api/pull/1',
+    title: '題',
     owner: 'acme',
     repo: 'api',
     draft: false,

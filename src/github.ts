@@ -4,6 +4,8 @@
 import type { PullRequest, Review, Reviewer } from './classify.ts'
 
 export const PAGE_SIZE = 50
+/** 題の長さの上限（文字）。 */
+const TITLE_MAX = 120
 
 export const QUERY = `query($q: String!, $after: String) {
   viewer { login }
@@ -12,7 +14,7 @@ export const QUERY = `query($q: String!, $after: String) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
-        id number url isDraft updatedAt mergeable reviewDecision
+        id number title url isDraft updatedAt mergeable reviewDecision
         author { login }
         repository { name owner { login } }
         reviewRequests(first: 50) {
@@ -51,6 +53,13 @@ const nodesOf = (value: unknown): Json[] => listOf(objectOf(value).nodes)
 function complete(value: unknown): boolean {
   const { nodes, totalCount } = objectOf(value)
   return Array.isArray(nodes) && typeof totalCount === 'number' && totalCount <= nodes.length
+}
+
+/** 題。改行や見えない文字を入れず、長すぎるものは切る（数百行をまとめて送るため）。 */
+function titleOf(value: unknown): string {
+  const flat = (stringOf(value) ?? '').replace(/[\s\p{Cc}]+/gu, ' ').trim()
+  const letters = [...flat]
+  return letters.length > TITLE_MAX ? `${letters.slice(0, TITLE_MAX - 1).join('')}…` : flat
 }
 
 function reviewStateOf(value: unknown): Review['state'] | null {
@@ -142,6 +151,7 @@ export function pullRequestOf(node: Json, failed = false): PullRequest | null {
     id,
     number: node.number,
     url,
+    title: titleOf(node.title),
     owner,
     repo,
     draft: node.isDraft === true,

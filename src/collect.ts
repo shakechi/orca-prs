@@ -62,6 +62,7 @@ function rowOf<S extends string>(
     id: pr.id,
     url: pr.url,
     place: `${place} #${pr.number}`,
+    title: pr.title,
     note: verdict.note,
     updatedAt: pr.updatedAt,
     draft: pr.draft,

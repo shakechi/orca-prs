@@ -25,6 +25,7 @@ export interface PullRequest {
   id: string
   number: number
   url: string
+  title: string
   owner: string
   repo: string
   draft: boolean

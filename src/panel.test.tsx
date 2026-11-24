@@ -11,6 +11,7 @@ function row<S extends string>(place: string, state: S, days = 0, extra: Partial
     id: place,
     url: `https://github.com/${place.replace(' #', '/pull/')}`,
     place,
+    title: `${place} の題`,
     note: 'CI passed',
     // 境目ちょうどの行が、動かす速さで揺れないように、少しだけ古くする
     updatedAt: Date.now() - days * DAY - 1000,
@@ -80,7 +81,8 @@ test('はじめは自分の PR を、状態ごとに出す', async () => {
   const { shows, close } = await open()
   for (const label of ['Todo', 'Waiting', 'Fix', 'Merge']) assert.ok(shows(label), label)
   assert.ok(shows('acme/api #482'))
-  assert.ok(shows('Changes requested · 3 unresolved'))
+  // 理由のあとに題
+  assert.ok(shows('Changes requested · 3 unresolved · acme/api #482 の題'))
   assert.ok(!shows('acme/web #91'))
   await close()
 })

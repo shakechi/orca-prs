@@ -14,7 +14,8 @@ export interface PrRow<S extends string = string> {
   url: string
   // 「owner/name #番号」。自分のリポジトリなら owner を省く
   place: string
-  // 2 行目。状態の理由や、誰を待っているか
+  title: string
+  // 状態の理由や、誰を待っているか
   note: string
   // 最後の更新（ミリ秒）
   updatedAt: number

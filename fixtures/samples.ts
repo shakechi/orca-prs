@@ -10,6 +10,7 @@ export function prNode(place: string, overrides: Node = {}): Node {
     id: `PR_${place}`,
     number: Number(number),
     url: `https://github.com/${path}/pull/${number}`,
+    title: `${name} の ${number} 番の題`,
     isDraft: false,
     updatedAt: new Date().toISOString(),
     mergeable: 'MERGEABLE',

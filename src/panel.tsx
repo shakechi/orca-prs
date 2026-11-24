@@ -201,15 +201,19 @@ function GroupRows({ group }: { group: Group }) {
           {shown.map((row) => (
             <ListItem key={row.id} onPress={() => openInBrowser(row.url)}>
               <Row gap="xs" align="start">
-                <Text tone={group.tone} muted={group.tone === 'neutral'} size="xs">
-                  {group.hollow ? '○' : '●'}
-                </Text>
+                {/* 丸は縮めない。縮むと、長い題の行で文字に重なる */}
+                <Box shrink={false}>
+                  <Text tone={group.tone} muted={group.tone === 'neutral'} size="xs">
+                    {group.hollow ? '○' : '●'}
+                  </Text>
+                </Box>
                 <Box grow shrink minWidth={0} direction="column" gap="none">
                   <Text truncate size="xs" weight="semibold" muted={group.hollow}>
                     {row.place}
                   </Text>
                   <Text truncate muted size="xs">
-                    {row.note}
+                    {/* 理由が先。題は長いことがあり、先に置くと理由が切れて見えなくなる */}
+                    {row.title === '' ? row.note : `${row.note} · ${row.title}`}
                   </Text>
                 </Box>
                 <Box shrink={false} direction="row" gap="xs" align="center">
