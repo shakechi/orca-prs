@@ -10,6 +10,7 @@ test('応答の 1 件から、判定に使うものを取り出す', () => {
       mergeable: 'CONFLICTING',
       reviewDecision: 'CHANGES_REQUESTED',
       reviewRequests: {
+        totalCount: 5,
         nodes: [
           { requestedReviewer: { __typename: 'User', login: 'kato' } },
           { requestedReviewer: { __typename: 'User', login: 'kato' } },
@@ -20,7 +21,7 @@ test('応答の 1 件から、判定に使うものを取り出す', () => {
       },
       latestOpinionatedReviews: reviewed('sato', 'CHANGES_REQUESTED'),
       latestReviews: reviewed('bot', 'COMMENTED', 'Bot'),
-      reviewThreads: { nodes: [{ isResolved: false }, { isResolved: true }] },
+      reviewThreads: { totalCount: 2, nodes: [{ isResolved: false }, { isResolved: true }] },
       viewerLatestReview: { state: 'APPROVED' },
       commits: checks('ERROR'),
     }),
@@ -46,7 +47,9 @@ test('応答の 1 件から、判定に使うものを取り出す', () => {
     opinions: [{ login: 'sato', bot: false, state: 'changes' }],
     latest: [{ login: 'bot', bot: true, state: 'commented' }],
     unresolved: 1,
+    moreUnresolved: false,
     viewerReview: 'approved',
+    incomplete: false,
   })
 })
 
@@ -59,7 +62,7 @@ test('チェックの結果を読む', () => {
   assert.equal(of(null)?.checks, 'none')
 })
 
-test('欠けていても困らないものは、ないものとして読む', () => {
+test('欠けた項目は、ないものと言い切らない', () => {
   const pr = pullRequestOf({
     id: 'x',
     number: 1,
@@ -72,7 +75,39 @@ test('欠けていても困らないものは、ないものとして読む', ()
   assert.equal(pr?.author, null)
   assert.equal(pr?.mergeable, 'unknown')
   assert.deepEqual(pr?.requested, [])
+  assert.equal(pr?.incomplete, true)
   assert.deepEqual(pr?.latest as unknown, [{ login: 'ghost', bot: false, state: 'commented' }])
+})
+
+test('上限で切れた一覧は、読み切れていないものとして扱う', () => {
+  const cut = { totalCount: 51, nodes: [] }
+  const of = (overrides: Record<string, unknown>) => pullRequestOf(prNode('a/b#1', overrides))
+  assert.equal(of({})?.incomplete, false)
+  assert.equal(of({ reviewRequests: cut })?.incomplete, true)
+  assert.equal(of({ latestOpinionatedReviews: cut })?.incomplete, true)
+  assert.equal(of({ latestReviews: cut })?.incomplete, true)
+  assert.equal(of({ reviewThreads: cut })?.incomplete, false)
+  assert.equal(of({ reviewThreads: cut })?.moreUnresolved, true)
+})
+
+test('GitHub が一部を読めなかった PR だけを、読み切れていないものとして扱う', () => {
+  const page = parsePage(
+    answer([prNode('a/b#1'), prNode('a/b#2'), prNode('a/b#3')], {
+      errors: [
+        { message: 'だめ', path: ['search', 'nodes', 1, 'reviewDecision'] },
+        // 名前の見えないチーム。依頼中であることは分かっている
+        {
+          message: '見えない',
+          path: ['search', 'nodes', 2, 'reviewRequests', 'nodes', 0, 'requestedReviewer', 'name'],
+        },
+        { message: '場所が分からない' },
+      ],
+    }),
+  )
+  assert.deepEqual(
+    page.prs.map((pr) => pr.incomplete),
+    [false, true, false],
+  )
 })
 
 test('行にできない形は読まない', () => {
@@ -86,7 +121,11 @@ test('行にできない形は読まない', () => {
 
 test('一部だけ読めた応答は、読めたものと失敗の両方を返す', () => {
   const page = parsePage(
-    answer([prNode('a/b#1'), null, {}], { total: 9, next: 'C1', errors: ['SAML が要る'] }),
+    answer([prNode('a/b#1'), null, {}], {
+      total: 9,
+      next: 'C1',
+      errors: [{ message: 'SAML が要る' }],
+    }),
   )
   assert.equal(page.prs.length, 1)
   assert.equal(page.unreadable, 2)

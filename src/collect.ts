@@ -24,7 +24,7 @@ interface Found {
   errors: string[]
 }
 
-async function search(github: GitHub, q: string): Promise<Found> {
+async function search(github: GitHub, q: string, stop: AbortSignal): Promise<Found> {
   const found: Found = { viewer: '', prs: [], omitted: 0, unreadable: 0, errors: [] }
   const seen = new Set<string>()
   let after: string | null = null
@@ -32,6 +32,8 @@ async function search(github: GitHub, q: string): Promise<Found> {
   let read = 0
   for (let page = 0; page < MAX_PAGES; page += 1) {
     const result = parsePage(await github.graphql(QUERY, { q, after }))
+    // ほかの検索が失敗していたら、続きは使われない
+    if (stop.aborted) return found
     found.viewer = result.viewer
     found.unreadable += result.unreadable
     found.errors.push(...result.errors)
@@ -83,11 +85,16 @@ export async function collect(
   known: ReadonlyMap<string, PullRequest['mergeable']> = new Map(),
 ): Promise<Collected> {
   const queries = searchesFor(qualifiers)
-  const [mine, requested, reviewed] = await Promise.all([
-    search(github, queries.mine),
-    search(github, queries.requested),
-    search(github, queries.reviewed),
-  ])
+  const stop = new AbortController()
+  const searching = [queries.mine, queries.requested, queries.reviewed].map((q) =>
+    search(github, q, stop.signal).catch((error: unknown) => {
+      stop.abort()
+      throw error
+    }),
+  )
+  // 失敗しても、ほかの検索が終わるのを待つ。先に戻ると、次の取り直しと重なる
+  await Promise.allSettled(searching)
+  const [mine, requested, reviewed] = (await Promise.all(searching)) as [Found, Found, Found]
 
   const mergeable: Collected['mergeable'] = new Map()
   let unsettled = false

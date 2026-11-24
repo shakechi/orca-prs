@@ -16,10 +16,10 @@ export function prNode(place: string, overrides: Node = {}): Node {
     reviewDecision: null,
     author: { login: 'me' },
     repository: { name, owner: { login: owner } },
-    reviewRequests: { nodes: [] },
-    latestOpinionatedReviews: { nodes: [] },
-    latestReviews: { nodes: [] },
-    reviewThreads: { nodes: [] },
+    reviewRequests: { totalCount: 0, nodes: [] },
+    latestOpinionatedReviews: { totalCount: 0, nodes: [] },
+    latestReviews: { totalCount: 0, nodes: [] },
+    reviewThreads: { totalCount: 0, nodes: [] },
     viewerLatestReview: null,
     commits: { nodes: [{ commit: { statusCheckRollup: { state: 'SUCCESS' } } }] },
     ...overrides,
@@ -29,7 +29,7 @@ export function prNode(place: string, overrides: Node = {}): Node {
 export interface AnswerOptions {
   total?: number
   next?: string | null
-  errors?: string[]
+  errors?: { message: string; path?: (string | number)[] }[]
 }
 
 /** 検索の応答の全文。 */
@@ -43,15 +43,17 @@ export function answer(nodes: unknown[], options: AnswerOptions = {}): string {
         nodes,
       },
     },
-    ...(options.errors ? { errors: options.errors.map((message) => ({ message })) } : {}),
+    ...(options.errors ? { errors: options.errors } : {}),
   })
 }
 
 export const requested = (...logins: string[]) => ({
+  totalCount: logins.length,
   nodes: logins.map((login) => ({ requestedReviewer: { __typename: 'User', login } })),
 })
 
 export const reviewed = (login: string, state: string, __typename = 'User') => ({
+  totalCount: 1,
   nodes: [{ state, author: { __typename, login } }],
 })
 

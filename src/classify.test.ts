@@ -25,7 +25,9 @@ function pr(overrides: Partial<PullRequest> = {}): PullRequest {
     opinions: [],
     latest: [],
     unresolved: 0,
+    moreUnresolved: false,
     viewerReview: null,
+    incomplete: false,
     ...overrides,
   }
 }
@@ -175,6 +177,30 @@ const CASES: [string, Partial<PullRequest>, string, string][] = [
     { decision: 'approved', requested: [user('sato')] },
     'merge',
     'CI passed',
+  ],
+  [
+    '読めていないところがあれば、Merge にしない',
+    { opinions: [review('kato', 'approved')], incomplete: true },
+    'todo',
+    'kato approved · Not fully read',
+  ],
+  [
+    'まとめの値が Approve でも、読めていないところがあれば Merge にしない',
+    { decision: 'approved', checks: 'none', incomplete: true },
+    'todo',
+    'Not fully read',
+  ],
+  [
+    '読めていないところがあっても、分かっている直すものは Fix に出す',
+    { checks: 'failed', incomplete: true },
+    'fix',
+    'CI failed · Not fully read',
+  ],
+  [
+    '指摘を全部は読めていないときは、下限と分かるように出す',
+    { decision: 'changes', unresolved: 100, moreUnresolved: true },
+    'fix',
+    'Changes requested · 100+ unresolved',
   ],
   [
     'コンフリクトか不明なうちは、止めない',

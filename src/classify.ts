@@ -41,10 +41,13 @@ export interface PullRequest {
   opinions: Review[]
   // 人ごとの最新のレビュー。コメントだけのものも入る
   latest: Review[]
-  // 解決していない指摘の数
+  // 解決していない指摘の数。多すぎて全部は読めていないなら、moreUnresolved が真
   unresolved: number
+  moreUnresolved: boolean
   // 自分の最新のレビュー
   viewerReview: Review['state'] | null
+  // 状態を決めるのに要るもののうち、読めなかったものや、読み切れなかったものがある
+  incomplete: boolean
 }
 
 const SEPARATOR = ' · '
@@ -69,6 +72,13 @@ function namesOf(reviewers: Reviewer[]): string | null {
   if (hidden > 0) names.push(hidden === 1 ? 'a team' : `${hidden} teams`)
   return names.join(', ')
 }
+
+/** 読めていないものがあるときの注記。 */
+const NOT_FULLY_READ = 'Not fully read'
+const doubt = (pr: PullRequest) => (pr.incomplete ? NOT_FULLY_READ : null)
+
+/** チェックの結果。読めていないものがあるときは、ないと言い切らない。 */
+const checksNote = (pr: PullRequest) => doubt(pr) ?? CHECKS_NOTE[pr.checks]
 
 /** マージを止めている、直すもの。 */
 function blockers(pr: PullRequest): string[] {
@@ -102,19 +112,21 @@ export function mineVerdict(pr: PullRequest): Verdict<MineState> {
   const found = blockers(pr)
 
   if (changes) {
-    const detail = found.length === 0 && pr.unresolved > 0 ? `${pr.unresolved} unresolved` : null
-    return { state: 'fix', note: join(['Changes requested', ...found, detail]) }
+    const threads = `${pr.unresolved}${pr.moreUnresolved ? '+' : ''} unresolved`
+    const detail = found.length === 0 && pr.unresolved > 0 ? threads : null
+    return { state: 'fix', note: join(['Changes requested', ...found, detail, doubt(pr)]) }
   }
   // 作業中の PR は、CI が落ちていたりコンフリクトしていたりするのが普通なので、Fix にしない
-  if (pr.draft) return { state: 'todo', note: join(['Draft', ...found]) }
-  if (found.length > 0) return { state: 'fix', note: join(found) }
+  if (pr.draft) return { state: 'todo', note: join(['Draft', ...found, doubt(pr)]) }
+  if (found.length > 0) return { state: 'fix', note: join([...found, doubt(pr)]) }
 
   const approvals = pr.opinions.filter((r) => r.state === 'approved' && notAsked(r))
   const approved =
     pr.decision === 'approved' ||
     // 必須レビューのないリポジトリ。依頼中の人が残っていれば、まだ待つ
     (pr.decision === null && approvals.length > 0 && pr.requested.length === 0)
-  if (approved) return { state: 'merge', note: CHECKS_NOTE[pr.checks] }
+  // 読めていないところに修正依頼や失敗があるかもしれないうちは、マージできると言わない
+  if (approved && !pr.incomplete) return { state: 'merge', note: CHECKS_NOTE[pr.checks] }
 
   const running = pr.checks === 'running' ? CHECKS_NOTE.running : null
   const opined = new Set(pr.opinions.map((r) => r.login))
@@ -130,21 +142,25 @@ export function mineVerdict(pr: PullRequest): Verdict<MineState> {
   if (pr.requested.length > 0) {
     const names = namesOf(pr.requested)
     const progress = did(approvals, 'approved')
-    return { state: 'waiting', note: progress ? join([progress, names]) : join([names, running]) }
+    const note = progress ? [progress, names] : [names, running]
+    return { state: 'waiting', note: join([...note, doubt(pr)]) }
   }
   if (comments.length > 0) {
-    return { state: 'waiting', note: join([did(comments, 'commented'), running]) }
+    return { state: 'waiting', note: join([did(comments, 'commented'), running, doubt(pr)]) }
   }
   // Approve はあるが、必須の人数に足りず、次の人にまだ頼んでいない
   if (approvals.length > 0) {
-    return { state: 'todo', note: join([did(approvals, 'approved'), 'More reviews needed']) }
+    return {
+      state: 'todo',
+      note: join([did(approvals, 'approved'), doubt(pr) ?? 'More reviews needed']),
+    }
   }
-  return { state: 'todo', note: CHECKS_NOTE[pr.checks] }
+  return { state: 'todo', note: checksNote(pr) }
 }
 
 /** 他人の PR の 2 行目。直すのは作者なので、状態は変えずに注記だけ出す。 */
 function reviewNote(pr: PullRequest): string {
-  return join([`by ${pr.author ?? 'ghost'}`, pr.draft ? 'Draft' : null, ...blockers(pr)])
+  return join([`by ${pr.author ?? 'ghost'}`, pr.draft ? 'Draft' : null, ...blockers(pr), doubt(pr)])
 }
 
 /** 自分（またはチーム）にレビューの依頼が来ている PR。 */

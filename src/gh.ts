@@ -35,7 +35,6 @@ const DEFAULT_TIMEOUT_MS = 30_000
 const MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 /** gh が「ログインしていない」で終わるときの値。 */
 const NOT_SIGNED_IN = 4
-const TOO_LONG = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
 const MARK_BEGIN = '__PRS_PATH_BEGIN__'
 const MARK_END = '__PRS_PATH_END__'
 
@@ -123,9 +122,8 @@ export function createGh(options: GhOptions): GitHub {
         (error, stdout, stderr) => {
           running.delete(child)
           const code = error === null ? 0 : (error.code ?? error.signal ?? 'unknown')
-          // 出力が長すぎて終わらせたときも killed になる。時間切れと混ぜない
-          const timedOut = error?.killed === true && code !== TOO_LONG
-          resolve({ code, stdout, stderr, timedOut })
+          // 出力が長すぎて終わらせたときは、killed にならない
+          resolve({ code, stdout, stderr, timedOut: error?.killed === true })
         },
       )
       running.add(child)

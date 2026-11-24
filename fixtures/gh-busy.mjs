@@ -23,7 +23,10 @@ const MINE = [
     ...ago(2),
     reviewDecision: 'CHANGES_REQUESTED',
     latestOpinionatedReviews: reviewed('kato', 'CHANGES_REQUESTED'),
-    reviewThreads: { nodes: [{ isResolved: false }, { isResolved: false }, { isResolved: true }] },
+    reviewThreads: {
+      totalCount: 3,
+      nodes: [{ isResolved: false }, { isResolved: false }, { isResolved: true }],
+    },
   }),
   prNode('acme/web#95', { ...ago(0.2), commits: checks('FAILURE') }),
   prNode('me/skills#3', { ...ago(30), mergeable: 'CONFLICTING' }),

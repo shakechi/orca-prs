@@ -119,16 +119,35 @@ function groupsOf<S extends string>(
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
 
+/** ワーカーから届いたものを出す。 */
+function receive(next: PrsState): void {
+  const current = read(prs)
+  // 休んでいたワーカーが起き直すと、空から始まる。取り終わるまでは、前の行を出しておく
+  const restarted = next.status === 'starting' && current !== null && current.fetchedAt !== null
+  set(prs, restarted ? { ...current, fetching: next.fetching } : next)
+  // 届いたのなら、ワーカーは動いている
+  set(failure, null)
+}
+
+let requests = 0
+
 async function refresh(maxAgeMs: number): Promise<void> {
+  const mine = ++requests
+  const startedAt = Date.now()
   try {
     const next = await plugin.request(
       'prs.refresh',
       { maxAgeMs },
       { timeoutMs: REFRESH_TIMEOUT_MS },
     )
-    set(prs, next)
-    set(failure, null)
+    receive(next)
   } catch (error) {
+    const current = read(prs)
+    // あとから頼んだものがあるか、待つのをやめたあとに取れていたら、この失敗はもう古い
+    if (mine !== requests) return
+    if (current !== null && (current.fetchedAt ?? 0) >= startedAt) return
+    // ワーカーが途中で止まったときに、「取得中」のまま、押し直せなくならないようにする
+    if (current !== null) set(prs, { ...current, fetching: false })
     set(failure, messageOf(error))
   }
 }
@@ -143,7 +162,7 @@ async function openInBrowser(url: string): Promise<void> {
 }
 
 export function setup(ctx: PanelContext): () => void {
-  ctx.subscriptions.push(plugin.on('prs.changed', (next) => set(prs, next)))
+  ctx.subscriptions.push(plugin.on('prs.changed', receive))
   // ワーカーが前に取ったものがあれば、先に出す
   plugin
     .request('prs.get')

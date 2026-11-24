@@ -15,7 +15,8 @@ export const QUERY = `query($q: String!, $after: String) {
         id number url isDraft updatedAt mergeable reviewDecision
         author { login }
         repository { name owner { login } }
-        reviewRequests(first: 20) {
+        reviewRequests(first: 50) {
+          totalCount
           nodes {
             requestedReviewer {
               __typename
@@ -26,9 +27,9 @@ export const QUERY = `query($q: String!, $after: String) {
             }
           }
         }
-        latestOpinionatedReviews(first: 30) { nodes { state author { __typename login } } }
-        latestReviews(first: 30) { nodes { state author { __typename login } } }
-        reviewThreads(first: 100) { nodes { isResolved } }
+        latestOpinionatedReviews(first: 50) { totalCount nodes { state author { __typename login } } }
+        latestReviews(first: 50) { totalCount nodes { state author { __typename login } } }
+        reviewThreads(first: 100) { totalCount nodes { isResolved } }
         viewerLatestReview { state }
         commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
       }
@@ -45,6 +46,12 @@ const listOf = (value: unknown): Json[] => (Array.isArray(value) ? value.filter(
 const stringOf = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null
 const nodesOf = (value: unknown): Json[] => listOf(objectOf(value).nodes)
+
+/** 一覧を全部読めたか。届かなかったものや、上限で切れたものを、空の一覧と混ぜない。 */
+function complete(value: unknown): boolean {
+  const { nodes, totalCount } = objectOf(value)
+  return Array.isArray(nodes) && typeof totalCount === 'number' && totalCount <= nodes.length
+}
 
 function reviewStateOf(value: unknown): Review['state'] | null {
   switch (value) {
@@ -116,8 +123,11 @@ function mergeableOf(value: unknown): PullRequest['mergeable'] {
   return value === 'CONFLICTING' ? 'conflict' : 'unknown'
 }
 
-/** 応答の 1 件。行にできない形なら null。 */
-export function pullRequestOf(node: Json): PullRequest | null {
+/**
+ * 応答の 1 件。行にできない形なら null。
+ * failed は、この PR のどこかを読むのに GitHub が失敗したこと。
+ */
+export function pullRequestOf(node: Json, failed = false): PullRequest | null {
   const repository = objectOf(node.repository)
   const id = stringOf(node.id)
   const url = stringOf(node.url)
@@ -144,7 +154,13 @@ export function pullRequestOf(node: Json): PullRequest | null {
     opinions: reviewsOf(node.latestOpinionatedReviews),
     latest: reviewsOf(node.latestReviews),
     unresolved: nodesOf(node.reviewThreads).filter((thread) => thread.isResolved === false).length,
+    moreUnresolved: !complete(node.reviewThreads),
     viewerReview: reviewStateOf(objectOf(node.viewerLatestReview).state),
+    incomplete:
+      failed ||
+      !complete(node.reviewRequests) ||
+      !complete(node.latestOpinionatedReviews) ||
+      !complete(node.latestReviews),
   }
 }
 
@@ -160,6 +176,21 @@ export interface Page {
   errors: string[]
 }
 
+/**
+ * GitHub が一部を読めなかった PR の、応答の中での位置。
+ * 読めなかった項目は null で届き、もともと空のものと見分けがつかない。
+ * 依頼中のレビュアーの名前だけは別で、見えないチームとして扱えるので数えない。
+ */
+function failedNodes(errors: Json[]): Set<number> {
+  const failed = new Set<number>()
+  for (const { path } of errors) {
+    if (!Array.isArray(path) || path[0] !== 'search' || path[1] !== 'nodes') continue
+    if (path.includes('requestedReviewer')) continue
+    if (typeof path[2] === 'number') failed.add(path[2])
+  }
+  return failed
+}
+
 /** 応答の全文を読む。使えるものがなければ、理由を Error で投げる。 */
 export function parsePage(text: string): Page {
   let body: unknown
@@ -168,7 +199,8 @@ export function parsePage(text: string): Page {
   } catch {
     throw new Error('GitHub answered with something that is not JSON')
   }
-  const errors = listOf(objectOf(body).errors).flatMap((error) => stringOf(error.message) ?? [])
+  const reported = listOf(objectOf(body).errors)
+  const errors = reported.flatMap((error) => stringOf(error.message) ?? [])
   const data = objectOf(objectOf(body).data)
   const viewer = stringOf(objectOf(data.viewer).login)
   const search = objectOf(data.search)
@@ -179,11 +211,12 @@ export function parsePage(text: string): Page {
   }
   const prs: PullRequest[] = []
   let unreadable = 0
-  for (const node of search.nodes) {
-    const pr = isObject(node) ? pullRequestOf(node) : null
+  const failed = failedNodes(reported)
+  search.nodes.forEach((node: unknown, index) => {
+    const pr = isObject(node) ? pullRequestOf(node, failed.has(index)) : null
     if (pr === null) unreadable += 1
     else prs.push(pr)
-  }
+  })
   const info = objectOf(search.pageInfo)
   return {
     viewer,

@@ -207,6 +207,43 @@ test('ワーカーが知らせてきたら、出し直す', async () => {
   await close()
 })
 
+test('待つのをやめたあとに取れたら、失敗の説明を消す', async () => {
+  const { view, host, shows, close } = await open()
+  host.respond('plugin.request', () => {
+    throw hostError('timeout', 'the worker did not answer')
+  })
+  await view.press({ label: 'Refresh' })
+  assert.ok(shows('the worker did not answer'))
+  assert.ok(shows('acme/api #482'))
+  await view.post('prs.changed', ready())
+  assert.ok(!shows('the worker did not answer'))
+  await close()
+})
+
+test('取得中のままワーカーが止まっても、押し直せる', async () => {
+  const { view, host, close } = await open()
+  await view.post('prs.changed', ready({ fetchedAt: Date.now() - 60_000 }))
+  host.respond('plugin.request', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    throw hostError('unavailable', 'stopped')
+  })
+  const pressing = view.press({ label: 'Refresh' })
+  await view.post('prs.changed', ready({ fetchedAt: Date.now() - 60_000, fetching: true }))
+  await pressing
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  await view.settled()
+  assert.ok(view.find({ label: 'Refresh' }))
+  await close()
+})
+
+test('休んでいたワーカーが起き直しても、前の行を消さない', async () => {
+  const { view, shows, close } = await open()
+  await view.post('prs.changed', { ...STARTING, fetching: true })
+  assert.ok(shows('acme/api #482'))
+  assert.ok(view.find({ label: 'Updating' }))
+  await close()
+})
+
 test('まだ取れていない間は、0 件と見せない', async () => {
   const { view, shows, close } = await open({ ...STARTING, fetching: true })
   assert.ok(!shows('My PRs 0'))

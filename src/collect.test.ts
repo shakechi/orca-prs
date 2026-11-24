@@ -133,7 +133,7 @@ test('コンフリクトの計算が終わっていなければ、前に分か�
 
 test('読めなかった PR があれば、数と理由を伝える', async () => {
   const { github } = fake({
-    mine: () => answer([prNode('a/b#1'), null], { errors: ['SAML が要る'] }),
+    mine: () => answer([prNode('a/b#1'), null], { errors: [{ message: 'SAML が要る' }] }),
   })
   const found = await collect(github, [])
   assert.equal(found.mine.length, 1)
@@ -143,4 +143,32 @@ test('読めなかった PR があれば、数と理由を伝える', async () =
 test('1 つの検索が失敗したら、全体を失敗にする（欠けた一覧を、全部だと見せない）', async () => {
   const { github } = fake({ reviewed: () => '{"message":"Bad credentials"}' })
   await assert.rejects(collect(github, []), /Bad credentials/)
+})
+
+test('1 つの検索が失敗したら、ほかの検索の続きは読まず、終わるのを待ってから失敗する', async () => {
+  let release: () => void = () => undefined
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const asked: string[] = []
+  const github: GitHub = {
+    async graphql(_query, { q, after }) {
+      const kind = kindOf(q)
+      asked.push(`${kind}:${after ?? ''}`)
+      if (kind === 'reviewed') throw new Error('だめ')
+      await held
+      return answer([prNode('a/b#1')], { total: 99, next: 'C1' })
+    },
+    dispose() {},
+  }
+  let settled = false
+  const collecting = collect(github, []).finally(() => {
+    settled = true
+  })
+  const rejected = assert.rejects(collecting, /だめ/)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.equal(settled, false)
+  release()
+  await rejected
+  assert.deepEqual(asked.sort(), ['mine:', 'requested:', 'reviewed:'])
 })
