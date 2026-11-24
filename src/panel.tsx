@@ -221,15 +221,19 @@ function GroupRows({ group }: { group: Group }) {
                   </Text>
                 </Box>
                 <Box grow shrink minWidth={0} direction="column" gap="none">
-                  {/* 幅が足りなければ、見分けに使うブランチより、リポジトリが先に切れる */}
-                  <Text truncate size="xs">
-                    <Text size="xs" weight="semibold" muted={group.hollow}>
-                      {row.branch}
-                    </Text>{' '}
-                    <Text size="xs" muted>
-                      {row.repo}
-                    </Text>
-                  </Text>
+                  {/* 幅が足りなければ、両方が縮む。1 つの文にすると、後ろのブランチだけが消える */}
+                  <Box direction="row" gap="xs" minWidth={0}>
+                    <Box shrink minWidth={0}>
+                      <Text truncate size="xs" weight="semibold" muted={group.hollow}>
+                        {row.repo}
+                      </Text>
+                    </Box>
+                    <Box shrink minWidth={0}>
+                      <Text truncate size="xs" muted>
+                        {row.branch}
+                      </Text>
+                    </Box>
+                  </Box>
                   <Text truncate muted size="xs">
                     {/* 理由が先。題は長いことがあり、先に置くと理由が切れて見えなくなる */}
                     {row.title === '' ? row.note : `${row.note} · ${row.title}`}

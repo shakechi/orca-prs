@@ -97,6 +97,15 @@ test('直すものを一番上に出す', async () => {
   await close()
 })
 
+test('1 行目は、リポジトリ、ブランチの順', async () => {
+  const { view, close } = await open(
+    ready({ mine: [row('fix-login', 'fix', 0, { repo: 'acme/api' })] }),
+  )
+  const item = view.find({ testId: 'fix-login' })
+  assert.match(item?.text ?? '', /acme\/api\s*fix-login/)
+  await close()
+})
+
 test('状態は、空でも出す', async () => {
   const { shows, close } = await open(ready({ mine: [], reviews: [] }))
   for (const label of ['Todo', 'Waiting', 'Fix', 'Merge']) assert.ok(shows(label), label)
