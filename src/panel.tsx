@@ -1,7 +1,7 @@
-// PR のパネル（試作）。
+// PR のパネル。
 //
-// 自分の PR と、自分に来ているレビュー依頼を、何を待っているかの状態ごとに並べる。
-// 行は決め打ちの見本で、GitHub にはまだ問い合わせない。
+// 自分の PR と、自分に来ているレビュー依頼を、次に自分がやることの状態ごとに並べる。
+// 状態と 2 行目を決めるのはワーカー（classify.ts）で、ここで決めるのは並べ方と絞り込みだけ。
 //
 // 量が多い人のための絞り込み。数も、絞ったあとのものを出す。
 // - Draft を隠す、決めた日数より長く更新のないものを隠す（My PRs のタブのすぐ下。
@@ -13,19 +13,34 @@ import {
   atom,
   Box,
   Button,
+  Callout,
+  IconButton,
   Link,
   List,
   ListItem,
+  type PanelContext,
+  plugin,
+  RelativeTime,
   Row,
   read,
+  Spinner,
   Stack,
   set,
+  shell,
   Tab,
   Tabs,
   Text,
   Toolbar,
   update,
 } from 'orca'
+import {
+  MINE_STATES,
+  type MineState,
+  type PrRow,
+  type PrsState,
+  REVIEW_STATES,
+  type ReviewState,
+} from './protocol.ts'
 
 /** 状態ごとに、はじめから出す行の数。 */
 const LIMIT = 5
@@ -35,6 +50,23 @@ const ANY_AGE = 'any'
 
 /** 古いものを隠すときに選べる日数。これ以上の日数、更新がないものを隠す。 */
 const AGE_CHOICES = [7, 14, 30]
+
+const DAY_MS = 24 * 60 * 60 * 1000
+/** これより新しければ、取り直さない。 */
+const MAX_AGE_MS = 5 * 60 * 1000
+/** 取り直すかを確かめる間隔。取り直すのは、パネルが見えていて、MAX_AGE_MS を過ぎたときだけ。 */
+const CHECK_MS = 60 * 1000
+/** 取り終わるのを待つ長さの上限。過ぎても、結果は prs.changed で届く。 */
+const REFRESH_TIMEOUT_MS = 120 * 1000
+
+/** ワーカーから届いた、いちばん新しいもの。届くまでは null。 */
+const prs = atom<PrsState | null>(null)
+
+/** ワーカーに頼めなかった理由。 */
+const failure = atom<string | null>(null)
+
+/** ブラウザーで開けなかった理由。次に開けたら消す。 */
+const openFailure = atom<string | null>(null)
 
 /** Draft を隠すか。 */
 const hideDrafts = atom('hideDrafts', false, { persist: 'plugin' })
@@ -47,126 +79,94 @@ const expanded = atom<string[]>('expandedGroups', [])
 
 type Tone = 'neutral' | 'success' | 'warning' | 'danger'
 
-type SamplePr = {
-  id: string
-  place: string
-  note: string
-  age: string
-  // 最後の更新からの日数
-  days: number
-  draft?: boolean
-}
-
-type Group = {
+interface Look {
   label: string
   tone: Tone
   // 相手を待っている状態は、点を白抜きにする
   hollow: boolean
-  prs: SamplePr[]
 }
 
-const MINE: Group[] = [
-  {
-    label: 'Todo',
-    tone: 'neutral',
-    hollow: false,
-    // 新しい順。レビューを頼む前の PR は、たまりやすい
-    prs: [
-      { id: 'a501', place: 'acme/api #501', note: 'Draft', draft: true, age: '2h', days: 0 },
-      { id: 'a498', place: 'acme/api #498', note: 'CI passed', age: '1d', days: 1 },
-      { id: 'w97', place: 'acme/web #97', note: 'Draft', draft: true, age: '3d', days: 3 },
-      {
-        id: 'k11',
-        place: 'notes #11',
-        note: 'No checks',
-        age: '8d',
-        days: 8,
-      },
-      { id: 'd19', place: 'acme/docs #19', note: 'CI passed', age: '12d', days: 12 },
-      { id: 'a455', place: 'acme/api #455', note: 'Draft', draft: true, age: '40d', days: 40 },
-      { id: 'w60', place: 'acme/web #60', note: 'Draft', draft: true, age: '90d', days: 90 },
-    ],
-  },
-  {
-    label: 'Waiting',
-    tone: 'neutral',
-    hollow: true,
-    prs: [{ id: 'a490', place: 'acme/api #490', note: 'kato', age: '1d', days: 1 }],
-  },
-  {
-    label: 'Fix',
-    tone: 'danger',
-    hollow: false,
-    // 直す理由は 3 つ。レビューの修正依頼、CI の失敗、コンフリクト。どれなのかは 2 行目に出す
-    prs: [
-      {
-        id: 'a482',
-        place: 'acme/api #482',
-        note: 'Changes requested · 3 comments',
-        age: '2d',
-        days: 2,
-      },
-      { id: 'w95', place: 'acme/web #95', note: 'CI failed', age: '4h', days: 0 },
-      { id: 'm3', place: 'dotfiles #3', note: 'Conflict', age: '30d', days: 30 },
-    ],
-  },
-  {
-    label: 'Merge',
-    tone: 'success',
-    hollow: false,
-    prs: [{ id: 'd17', place: 'acme/docs #17', note: 'CI passed', age: '5d', days: 5 }],
-  },
-]
-
-const FOR_ME: Group[] = [
-  {
-    label: 'Review',
-    tone: 'warning',
-    hollow: false,
-    prs: [{ id: 'w91', place: 'acme/web #91', note: 'by kato', age: '3h', days: 0 }],
-  },
-  {
-    label: 'Waiting',
-    tone: 'neutral',
-    hollow: true,
-    prs: [
-      { id: 'w88', place: 'acme/web #88', note: 'by sato', age: '2d', days: 2 },
-      { id: 'd12', place: 'acme/docs #12', note: 'by mori', age: '45d', days: 45 },
-    ],
-  },
-]
-
-/** maxDays は、これ以上の日数、更新がないものを隠す境目。隠さないなら null。 */
-type Filters = { drafts: boolean; maxDays: number | null }
-
-/** Draft か古さで隠す行か。 */
-function hiddenByFilters(pr: SamplePr, filters: Filters): boolean {
-  return (
-    (filters.drafts && pr.draft === true) ||
-    (filters.maxDays !== null && pr.days >= filters.maxDays)
-  )
+const MINE_LOOK: Record<MineState, Look> = {
+  todo: { label: 'Todo', tone: 'neutral', hollow: false },
+  waiting: { label: 'Waiting', tone: 'neutral', hollow: true },
+  fix: { label: 'Fix', tone: 'danger', hollow: false },
+  merge: { label: 'Merge', tone: 'success', hollow: false },
 }
 
-/** Draft と古さで絞った並び。状態は、空になっても残す。自分の PR だけ、これを通す。 */
-function narrow(groups: Group[], filters: Filters): Group[] {
-  return groups.map((group) => ({
-    ...group,
-    prs: group.prs.filter((pr) => !hiddenByFilters(pr, filters)),
+const REVIEW_LOOK: Record<ReviewState, Look> = {
+  review: { label: 'Review', tone: 'warning', hollow: false },
+  waiting: { label: 'Waiting', tone: 'neutral', hollow: true },
+}
+
+interface Group extends Look {
+  id: string
+  rows: PrRow[]
+}
+
+/** 状態ごとに分ける。空の状態も残す。 */
+function groupsOf<S extends string>(
+  tab: string,
+  states: readonly S[],
+  look: Record<S, Look>,
+  rows: readonly PrRow<S>[],
+): Group[] {
+  return states.map((state) => ({
+    ...look[state],
+    id: `${tab}:${state}`,
+    rows: rows.filter((row) => row.state === state),
   }))
 }
 
-function count(groups: Group[]): number {
-  return groups.reduce((sum, group) => sum + group.prs.length, 0)
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error))
+
+async function refresh(maxAgeMs: number): Promise<void> {
+  try {
+    const next = await plugin.request(
+      'prs.refresh',
+      { maxAgeMs },
+      { timeoutMs: REFRESH_TIMEOUT_MS },
+    )
+    set(prs, next)
+    set(failure, null)
+  } catch (error) {
+    set(failure, messageOf(error))
+  }
+}
+
+async function openInBrowser(url: string): Promise<void> {
+  try {
+    await shell.openExternal(url)
+    set(openFailure, null)
+  } catch (error) {
+    set(openFailure, messageOf(error))
+  }
+}
+
+export function setup(ctx: PanelContext): () => void {
+  ctx.subscriptions.push(plugin.on('prs.changed', (next) => set(prs, next)))
+  // ワーカーが前に取ったものがあれば、先に出す
+  plugin
+    .request('prs.get')
+    .then((next) => {
+      if (read(prs) === null) set(prs, next)
+    })
+    // 続けて頼む refresh も同じ理由で失敗し、そちらが理由を出す
+    .catch(() => undefined)
+  void refresh(MAX_AGE_MS)
+  const timer = setInterval(() => {
+    if (read(ctx.visible)) void refresh(MAX_AGE_MS)
+  }, CHECK_MS)
+  return () => clearInterval(timer)
 }
 
 function toggle(id: string): void {
   update(expanded, (open) => (open.includes(id) ? open.filter((x) => x !== id) : [...open, id]))
 }
 
-function GroupRows({ group, id }: { group: Group; id: string }) {
-  const open = read(expanded).includes(id)
-  const shown = open ? group.prs : group.prs.slice(0, LIMIT)
-  const hidden = group.prs.length - shown.length
+function GroupRows({ group }: { group: Group }) {
+  const open = read(expanded).includes(group.id)
+  const shown = open ? group.rows : group.rows.slice(0, LIMIT)
+  const hidden = group.rows.length - shown.length
   return (
     <Stack gap="none">
       <Row justify="between" align="center">
@@ -174,28 +174,28 @@ function GroupRows({ group, id }: { group: Group; id: string }) {
           {group.label}
         </Text>
         <Text size="xs" muted>
-          {String(group.prs.length)}
+          {String(group.rows.length)}
         </Text>
       </Row>
       {shown.length === 0 ? null : (
         <List label={group.label}>
-          {shown.map((pr) => (
-            <ListItem key={pr.id}>
+          {shown.map((row) => (
+            <ListItem key={row.id} onPress={() => openInBrowser(row.url)}>
               <Row gap="xs" align="start">
                 <Text tone={group.tone} muted={group.tone === 'neutral'} size="xs">
                   {group.hollow ? '○' : '●'}
                 </Text>
                 <Box grow shrink minWidth={0} direction="column" gap="none">
                   <Text truncate size="xs" weight="semibold" muted={group.hollow}>
-                    {pr.place}
+                    {row.place}
                   </Text>
                   <Text truncate muted size="xs">
-                    {pr.note}
+                    {row.note}
                   </Text>
                 </Box>
                 <Box shrink={false} direction="row" gap="xs" align="center">
                   <Text muted size="xs">
-                    {pr.age}
+                    <RelativeTime at={row.updatedAt} format="duration" />
                   </Text>
                 </Box>
               </Row>
@@ -203,18 +203,30 @@ function GroupRows({ group, id }: { group: Group; id: string }) {
           ))}
         </List>
       )}
-      {group.prs.length > LIMIT ? (
+      {group.rows.length > LIMIT ? (
         <Text size="xs">
-          <Link onPress={() => toggle(id)}>{open ? 'Show less' : `Show ${hidden} more`}</Link>
+          <Link onPress={() => toggle(group.id)}>{open ? 'Show less' : `Show ${hidden} more`}</Link>
         </Text>
       ) : null}
     </Stack>
   )
 }
 
+/** maxDays は、これ以上の日数、更新がないものを隠す境目。隠さないなら null。 */
+interface Filters {
+  drafts: boolean
+  maxDays: number | null
+}
+
+/** Draft か古さで隠す行か。 */
+function hiddenByFilters(row: PrRow, filters: Filters, now: number): boolean {
+  if (filters.drafts && row.draft) return true
+  return filters.maxDays !== null && now - row.updatedAt >= filters.maxDays * DAY_MS
+}
+
 /** 自分が動く番の PR の数。相手を待っている状態は数えない。 */
 function onMe(groups: Group[]): number {
-  return count(groups.filter((group) => !group.hollow))
+  return groups.reduce((sum, group) => sum + (group.hollow ? 0 : group.rows.length), 0)
 }
 
 /** Draft と古さの絞り込み。自分の PR の全部の状態に効く。 */
@@ -268,37 +280,110 @@ function MineFilters({ filters, hidden }: { filters: Filters; hidden: number }) 
   )
 }
 
+/** 多すぎて取らなかったものがあること。 */
+function Omitted({ count }: { count: number }) {
+  if (count === 0) return null
+  return (
+    <Text size="xs" muted>
+      {`Only the most recent were checked. ${count} more on GitHub`}
+    </Text>
+  )
+}
+
+function Header({ state }: { state: PrsState }) {
+  return (
+    <Row justify="between" align="center" gap="xs">
+      <Text size="xs" muted>
+        {state.fetchedAt === null ? 'Not updated yet' : 'Updated '}
+        {state.fetchedAt === null ? null : <RelativeTime at={state.fetchedAt} />}
+      </Text>
+      {state.fetching ? (
+        <Spinner label="Updating" labelHidden />
+      ) : (
+        <IconButton
+          icon="refresh"
+          label="Refresh"
+          variant="ghost"
+          size="xs"
+          onPress={() => refresh(0)}
+        />
+      )}
+    </Row>
+  )
+}
+
 export default function PrsPanel() {
-  const age = read(hideOlderThan)
+  const state = read(prs)
+  const failed = read(failure)
+  const notOpened = read(openFailure)
+  const age = Number(read(hideOlderThan))
   const filters: Filters = {
     drafts: read(hideDrafts),
-    maxDays: age === ANY_AGE ? null : Number(age),
+    // 前の版で選べた日数が残っていても、いまのボタンで解除できないものは使わない
+    maxDays: AGE_CHOICES.includes(age) ? age : null,
   }
-  const mine = narrow(MINE, filters)
-  const hidden = count(MINE) - count(mine)
+
+  if (state === null) {
+    return failed === null ? (
+      <Spinner label="Loading pull requests" />
+    ) : (
+      <Callout tone="danger" title="Could not load" icon="error">
+        <Text size="xs">{failed}</Text>
+      </Callout>
+    )
+  }
+
+  const now = Date.now()
+  const kept = state.mine.filter((row) => !hiddenByFilters(row, filters, now))
+  const mine = groupsOf('mine', MINE_STATES, MINE_LOOK, kept)
+  const reviews = groupsOf('reviews', REVIEW_STATES, REVIEW_LOOK, state.reviews)
+  const problem = state.problem ?? failed
+
   return (
     <Stack gap="sm">
-      <Text size="xs" muted>
-        Sample rows. Nothing is fetched from GitHub yet.
-      </Text>
-      {/* 自分の PR と、自分に来ているレビュー依頼は、タブで切り替える。数は自分が動く番のもの */}
-      <Tabs label="Pull requests" defaultValue="mine">
-        <Tab value="mine" label={`My PRs ${onMe(mine)}`}>
-          <Stack gap="sm">
-            <MineFilters filters={filters} hidden={hidden} />
-            {mine.map((group) => (
-              <GroupRows key={group.label} group={group} id={`mine:${group.label}`} />
-            ))}
-          </Stack>
-        </Tab>
-        <Tab value="reviews" label={`Reviews ${onMe(FOR_ME)}`}>
-          <Stack gap="sm">
-            {FOR_ME.map((group) => (
-              <GroupRows key={group.label} group={group} id={`reviews:${group.label}`} />
-            ))}
-          </Stack>
-        </Tab>
-      </Tabs>
+      <Header state={state} />
+      {problem === null ? null : (
+        <Callout tone="danger" title="Could not update" icon="error">
+          <Text size="xs">{problem}</Text>
+        </Callout>
+      )}
+      {notOpened === null ? null : (
+        <Callout tone="danger" title="Could not open in the browser" icon="error">
+          <Text size="xs">{notOpened}</Text>
+        </Callout>
+      )}
+      {state.warning === null ? null : (
+        <Text size="xs" tone="warning">
+          {state.warning}
+        </Text>
+      )}
+      {/* まだ 1 回も取れていないときに、空の一覧を「0 件」と見せない */}
+      {state.fetchedAt === null ? (
+        problem === null ? (
+          <Spinner label="Loading pull requests" />
+        ) : null
+      ) : (
+        // 自分の PR と、自分に来ているレビュー依頼は、タブで切り替える。数は自分が動く番のもの
+        <Tabs label="Pull requests" defaultValue="mine">
+          <Tab value="mine" label={`My PRs ${onMe(mine)}`}>
+            <Stack gap="sm">
+              <MineFilters filters={filters} hidden={state.mine.length - kept.length} />
+              {mine.map((group) => (
+                <GroupRows key={group.id} group={group} />
+              ))}
+              <Omitted count={state.omitted.mine} />
+            </Stack>
+          </Tab>
+          <Tab value="reviews" label={`Reviews ${onMe(reviews)}`}>
+            <Stack gap="sm">
+              {reviews.map((group) => (
+                <GroupRows key={group.id} group={group} />
+              ))}
+              <Omitted count={state.omitted.reviews} />
+            </Stack>
+          </Tab>
+        </Tabs>
+      )}
     </Stack>
   )
 }

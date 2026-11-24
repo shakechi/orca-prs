@@ -1,7 +1,7 @@
 import { assert, test } from 'orca/testing'
+import { answer, prNode, requested, reviewed } from '../fixtures/samples.ts'
 import { collect, MAX_ROWS } from './collect.ts'
 import type { GitHub } from './gh.ts'
-import { answer, prNode, requested, reviewed } from './samples.ts'
 
 type Kind = 'mine' | 'requested' | 'reviewed'
 

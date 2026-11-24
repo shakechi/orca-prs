@@ -2,8 +2,8 @@
 
 import { assert, type MockHost, mockHost, mountWorker, test } from 'orca/testing'
 import type { OrcaWorkerApi } from 'orca/worker'
+import { answer, prNode } from '../fixtures/samples.ts'
 import type { PrsState } from './protocol.ts'
-import { answer, prNode } from './samples.ts'
 import { createWorker, type Worker } from './worker.ts'
 
 interface Fake {

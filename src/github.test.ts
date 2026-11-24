@@ -1,6 +1,6 @@
 import { assert, test } from 'orca/testing'
+import { answer, checks, prNode, reviewed } from '../fixtures/samples.ts'
 import { parsePage, parseTargets, pullRequestOf, searchesFor } from './github.ts'
-import { answer, checks, prNode, reviewed } from './samples.ts'
 
 test('応答の 1 件から、判定に使うものを取り出す', () => {
   const pr = pullRequestOf(
