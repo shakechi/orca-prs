@@ -75,6 +75,23 @@ const CASES: [string, Partial<PullRequest>, string, string][] = [
     '3 reviewers',
   ],
   [
+    '見えないチームは、名前のある人の後ろに出す',
+    { requested: [{ name: null, kind: 'team' }, user('kato')] },
+    'waiting',
+    'kato, a team',
+  ],
+  [
+    '見えないチームが 2 つ',
+    {
+      requested: [
+        { name: null, kind: 'team' },
+        { name: null, kind: 'team' },
+      ],
+    },
+    'waiting',
+    '2 teams',
+  ],
+  [
     '依頼中で CI も実行中',
     { requested: [user('kato')], checks: 'running' },
     'waiting',

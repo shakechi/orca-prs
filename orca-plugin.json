@@ -3,12 +3,13 @@
   "id": "prs",
   "name": "PRs",
   "version": "0.1.0",
-  "description": "Shows your pull requests and the reviews requested from you, grouped by what they are waiting for.",
+  "description": "Shows your pull requests and the reviews requested from you, grouped by what to do next. Reads GitHub through the gh command.",
   "engines": {
-    "orca": ">=1.4.247"
+    "orca": ">=1.4.259"
   },
-  "execution": "sandboxed-ui",
+  "execution": "trusted-worker",
   "pluginApi": 1,
+  "main": "src/worker.ts",
   "contributes": {
     "panels": [
       {
@@ -18,6 +19,29 @@
         "entry": "src/panel.tsx",
         "ui": "components"
       }
+    ],
+    "settings": [
+      {
+        "key": "targets",
+        "title": "Repositories to show",
+        "description": "Owners or repositories, separated by spaces, commas or new lines (for example: acme, acme/api). Leave empty to show all. A name that does not exist matches nothing.",
+        "type": "string",
+        "default": "",
+        "multiline": true
+      },
+      {
+        "key": "command",
+        "title": "Path to the gh command",
+        "description": "Leave empty to find gh on PATH. If it is not found, enter the full path (for example /opt/homebrew/bin/gh).",
+        "type": "string",
+        "default": "",
+        "placeholder": "gh"
+      }
     ]
-  }
+  },
+  "capabilities": [
+    {
+      "kind": "settings:own"
+    }
+  ]
 }

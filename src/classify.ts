@@ -8,8 +8,9 @@
 import type { MineState, ReviewState } from './protocol.ts'
 
 export interface Reviewer {
-  name: string
-  // team の name は、人のログイン名と同じ文字列になりうる。比べるときに混ぜない
+  // 見る権限のないチームは null
+  name: string | null
+  // チームの名前は、人のログイン名と同じ文字列になりうる。比べるときに混ぜない
   kind: 'user' | 'team' | 'bot'
 }
 
@@ -59,10 +60,14 @@ function did(people: Review[], verb: string): string | null {
   return `${people.length === 1 ? first.login : people.length} ${verb}`
 }
 
+/** 「kato」「kato, core」「3 reviewers」。名前の分からないチームは、後ろに数で出す。 */
 function namesOf(reviewers: Reviewer[]): string | null {
   if (reviewers.length === 0) return null
   if (reviewers.length > MAX_NAMES) return `${reviewers.length} reviewers`
-  return reviewers.map((reviewer) => reviewer.name).join(', ')
+  const names = reviewers.flatMap((reviewer) => reviewer.name ?? [])
+  const hidden = reviewers.length - names.length
+  if (hidden > 0) names.push(hidden === 1 ? 'a team' : `${hidden} teams`)
+  return names.join(', ')
 }
 
 /** マージを止めている、直すもの。 */
