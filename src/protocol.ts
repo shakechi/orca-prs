@@ -12,8 +12,10 @@ export type ReviewState = (typeof REVIEW_STATES)[number]
 export interface PrRow<S extends string = string> {
   id: string
   url: string
-  // 「owner/name #番号」。自分のリポジトリなら owner を省く
-  place: string
+  // ブランチ。作者の名前で始まるもの（kato/fix-login）は、その部分を省く
+  branch: string
+  // 「owner/name」。自分のリポジトリなら owner を省く
+  repo: string
   title: string
   // 状態の理由や、誰を待っているか
   note: string

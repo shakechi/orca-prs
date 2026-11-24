@@ -14,6 +14,7 @@ function pr(overrides: Partial<PullRequest> = {}): PullRequest {
     number: 1,
     url: 'https://github.com/acme/api/pull/1',
     title: '題',
+    branch: 'fix-login',
     owner: 'acme',
     repo: 'api',
     draft: false,

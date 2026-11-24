@@ -3,8 +3,11 @@
 import { assert, type MockHost, mockHost, mountWorker, test } from 'orca/testing'
 import type { OrcaWorkerApi } from 'orca/worker'
 import { answer, prNode } from '../fixtures/samples.ts'
-import type { PrsState } from './protocol.ts'
+import type { PrRow, PrsState } from './protocol.ts'
 import { createWorker, type Worker } from './worker.ts'
+
+/** 「owner/name #番号」。どの PR の行かを確かめるため。 */
+const placeOf = (row: PrRow) => row.url.replace('https://github.com/', '').replace('/pull/', ' #')
 
 interface Fake {
   commands: string[]
@@ -85,7 +88,7 @@ test('取りに行き、途中と結果をパネルに知らせる', async () =>
   const { mounted, refresh, states } = await start({ reply: oneOfMine() })
   const state = await refresh()
   assert.equal(state.status, 'ready')
-  assert.equal(state.mine[0]?.place, 'a/b #1')
+  assert.equal(state.mine.map(placeOf)[0], 'a/b #1')
   assert.equal(state.fetching, false)
   assert.ok(state.fetchedAt !== null)
   assert.deepEqual(
@@ -195,10 +198,10 @@ test('設定が変わったら、前の設定で取ったものを捨てて取�
   await first
   const last = states().at(-1)
   assert.deepEqual(
-    last?.mine.map((row) => row.place),
+    last?.mine.map((row) => placeOf(row)),
     ['acme/api #1'],
   )
-  assert.ok(states().every((posted) => posted.mine.every((row) => row.place !== 'old/old #1')))
+  assert.ok(states().every((posted) => posted.mine.every((row) => placeOf(row) !== 'old/old #1')))
   assert.equal(fake.disposes, 1)
   await mounted.deactivate()
 })

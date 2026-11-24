@@ -221,8 +221,14 @@ function GroupRows({ group }: { group: Group }) {
                   </Text>
                 </Box>
                 <Box grow shrink minWidth={0} direction="column" gap="none">
-                  <Text truncate size="xs" weight="semibold" muted={group.hollow}>
-                    {row.place}
+                  {/* 幅が足りなければ、見分けに使うブランチより、リポジトリが先に切れる */}
+                  <Text truncate size="xs">
+                    <Text size="xs" weight="semibold" muted={group.hollow}>
+                      {row.branch}
+                    </Text>{' '}
+                    <Text size="xs" muted>
+                      {row.repo}
+                    </Text>
                   </Text>
                   <Text truncate muted size="xs">
                     {/* 理由が先。題は長いことがあり、先に置くと理由が切れて見えなくなる */}

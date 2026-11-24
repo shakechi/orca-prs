@@ -14,7 +14,7 @@ export const QUERY = `query($q: String!, $after: String) {
     pageInfo { hasNextPage endCursor }
     nodes {
       ... on PullRequest {
-        id number title url isDraft updatedAt mergeable reviewDecision
+        id number title url headRefName isDraft updatedAt mergeable reviewDecision
         author { login }
         repository { name owner { login } }
         reviewRequests(first: 50) {
@@ -152,6 +152,7 @@ export function pullRequestOf(node: Json, failed = false): PullRequest | null {
     number: node.number,
     url,
     title: titleOf(node.title),
+    branch: stringOf(node.headRefName),
     owner,
     repo,
     draft: node.isDraft === true,

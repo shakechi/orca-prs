@@ -2,6 +2,10 @@ import { assert, test } from 'orca/testing'
 import { answer, prNode, requested, reviewed } from '../fixtures/samples.ts'
 import { collect, MAX_ROWS } from './collect.ts'
 import type { GitHub } from './gh.ts'
+import type { PrRow } from './protocol.ts'
+
+/** 「owner/name #番号」。どの PR の行かを確かめるため。 */
+const placeOf = (row: PrRow) => row.url.replace('https://github.com/', '').replace('/pull/', ' #')
 
 type Kind = 'mine' | 'requested' | 'reviewed'
 
@@ -45,16 +49,15 @@ test('自分の PR とレビュー依頼を、新しい順の行にする', asyn
       ]),
   })
   const found = await collect(github, [])
-  // 自分のリポジトリは、持ち主を省く
   assert.deepEqual(
-    found.mine.map((row) => [row.place, row.state, row.note]),
+    found.mine.map((row) => [placeOf(row), row.state, row.note]),
     [
       ['acme/api #482', 'waiting', 'kato'],
-      ['notes #11', 'todo', 'CI passed'],
+      ['me/notes #11', 'todo', 'CI passed'],
     ],
   )
   assert.deepEqual(
-    found.reviews.map((row) => [row.place, row.state, row.note]),
+    found.reviews.map((row) => [placeOf(row), row.state, row.note]),
     [
       ['acme/web #88', 'waiting', 'by sato'],
       ['acme/web #91', 'review', 'by kato'],
@@ -79,7 +82,7 @@ test('続きを読む。同じ PR が 2 回届いても 1 行にする', async (
         : answer([prNode('a/b#2'), prNode('a/b#3')], { total: 3 }),
   })
   const found = await collect(github, [])
-  assert.deepEqual(found.mine.map((row) => row.place).sort(), ['a/b #1', 'a/b #2', 'a/b #3'])
+  assert.deepEqual(found.mine.map((row) => placeOf(row)).sort(), ['a/b #1', 'a/b #2', 'a/b #3'])
   assert.deepEqual(
     asked.filter((call) => call.kind === 'mine').map((call) => call.after),
     [null, 'C1'],
@@ -171,4 +174,30 @@ test('1 つの検索が失敗したら、ほかの検索の続きは読まず、
   release()
   await rejected
   assert.deepEqual(asked.sort(), ['mine:', 'requested:', 'reviewed:'])
+})
+
+test('行の見出しは、ブランチとリポジトリ。分かりきった名前は省く', async () => {
+  const { github } = fake({
+    mine: () =>
+      answer([
+        prNode('me/notes#1', { ...at(9), headRefName: 'me/fix-login' }),
+        prNode('acme/api#2', { ...at(8), headRefName: 'fix/login' }),
+        // 読めなければ番号を出す
+        prNode('acme/api#3', { ...at(7), headRefName: null }),
+        prNode('acme/api#4', { ...at(6), headRefName: 'fix', author: null }),
+      ]),
+    requested: () =>
+      answer([prNode('acme/web#5', { headRefName: 'kato/retry', author: { login: 'kato' } })]),
+  })
+  const found = await collect(github, [])
+  assert.deepEqual(
+    [...found.mine, ...found.reviews].map((row) => [row.branch, row.repo]),
+    [
+      ['fix-login', 'notes'],
+      ['fix/login', 'acme/api'],
+      ['#3', 'acme/api'],
+      ['fix', 'acme/api'],
+      ['retry', 'acme/web'],
+    ],
+  )
 })

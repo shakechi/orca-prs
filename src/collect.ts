@@ -52,16 +52,25 @@ async function search(github: GitHub, q: string, stop: AbortSignal): Promise<Fou
   return found
 }
 
+/** 見出しにするブランチ。作者の名前は、行のほかの場所で分かるので省く。 */
+function branchOf(pr: PullRequest): string {
+  if (pr.branch === null) return `#${pr.number}`
+  const prefix = `${pr.author}/`
+  return pr.branch.startsWith(prefix) && pr.branch !== prefix
+    ? pr.branch.slice(prefix.length)
+    : pr.branch
+}
+
 function rowOf<S extends string>(
   pr: PullRequest,
   viewer: string,
   verdict: { state: S; note: string },
 ): PrRow<S> {
-  const place = pr.owner === viewer ? pr.repo : `${pr.owner}/${pr.repo}`
   return {
     id: pr.id,
     url: pr.url,
-    place: `${place} #${pr.number}`,
+    branch: branchOf(pr),
+    repo: pr.owner === viewer ? pr.repo : `${pr.owner}/${pr.repo}`,
     title: pr.title,
     note: verdict.note,
     updatedAt: pr.updatedAt,

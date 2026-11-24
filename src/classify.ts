@@ -26,6 +26,8 @@ export interface PullRequest {
   number: number
   url: string
   title: string
+  // 読めなければ null
+  branch: string | null
   owner: string
   repo: string
   draft: boolean

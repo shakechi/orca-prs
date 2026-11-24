@@ -32,6 +32,7 @@ test('応答の 1 件から、判定に使うものを取り出す', () => {
     number: 482,
     url: 'https://github.com/acme/api/pull/482',
     title: '再試行の待ち時間を直す',
+    branch: 'api-482',
     owner: 'acme',
     repo: 'api',
     draft: true,
