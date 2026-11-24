@@ -56,6 +56,8 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const MAX_AGE_MS = 5 * 60 * 1000
 /** 取り直すかを確かめる間隔。取り直すのは、パネルが見えていて、MAX_AGE_MS を過ぎたときだけ。 */
 const CHECK_MS = 60 * 1000
+/** 途中で切れた要求を、1 回だけやり直すまでの待ち時間。 */
+const RETRY_MS = 300
 /** 取り終わるのを待つ長さの上限。過ぎても、結果は prs.changed で届く。 */
 const REFRESH_TIMEOUT_MS = 120 * 1000
 
@@ -129,9 +131,14 @@ function receive(next: PrsState): void {
   set(failure, null)
 }
 
+/** ワーカーが入れ替わって、答える前に切れた失敗か。 */
+function disconnected(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'unavailable'
+}
+
 let requests = 0
 
-async function refresh(maxAgeMs: number): Promise<void> {
+async function refresh(maxAgeMs: number, retry = true): Promise<void> {
   const mine = ++requests
   const startedAt = Date.now()
   try {
@@ -146,6 +153,12 @@ async function refresh(maxAgeMs: number): Promise<void> {
     // あとから頼んだものがあるか、待つのをやめたあとに取れていたら、この失敗はもう古い
     if (mine !== requests) return
     if (current !== null && (current.fetchedAt ?? 0) >= startedAt) return
+    if (retry && disconnected(error)) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_MS))
+      // 待つ間に、ほかの要求が始まっていれば任せる
+      if (mine === requests) await refresh(maxAgeMs, false)
+      return
+    }
     // ワーカーが途中で止まったときに、「取得中」のまま、押し直せなくならないようにする
     if (current !== null) set(prs, { ...current, fetching: false })
     set(failure, messageOf(error))

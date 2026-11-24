@@ -241,7 +241,7 @@ test('取得中のままワーカーが止まっても、押し直せる', async
   const pressing = view.press({ label: 'Refresh' })
   await view.post('prs.changed', ready({ fetchedAt: Date.now() - 60_000, fetching: true }))
   await pressing
-  await new Promise((resolve) => setTimeout(resolve, 20))
+  await new Promise((resolve) => setTimeout(resolve, 500))
   await view.settled()
   assert.ok(view.find({ label: 'Refresh' }))
   await close()
@@ -287,10 +287,31 @@ test('ワーカーが動いていなければ、その理由を出す', async ()
   })
   const view = await mount(panel, { host })
   assert.ok(view.find({ text: /no worker/ }))
+  // 1 回やり直してから、理由を出す
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  await view.settled()
+  assert.equal(host.callsOf('plugin.request').length, 3)
   await view.unmount()
 })
 
 test('読めなかったものや、取らなかったものがあれば伝える', async () => {
+test('答える前に切れた要求は、1 回だけやり直す。失敗は見せない', async () => {
+  const { view, host, shows, close } = await open()
+  let asked = 0
+  host.respond('plugin.request', () => {
+    asked += 1
+    if (asked === 1) throw hostError('unavailable', 'worker disconnected')
+    return { output: ready({ mine: [row('one-1', 'merge')] }) }
+  })
+  await view.press({ label: 'Refresh' })
+  await new Promise((resolve) => setTimeout(resolve, 500))
+  await view.settled()
+  assert.equal(asked, 2)
+  assert.ok(shows('one-1'))
+  assert.ok(!shows('worker disconnected'))
+  await close()
+})
+
   const { shows, close } = await open(
     ready({
       warning: '1 pull request could not be read',
