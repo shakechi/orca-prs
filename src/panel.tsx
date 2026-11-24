@@ -214,7 +214,8 @@ function GroupRows({ group }: { group: Group }) {
                 </Box>
                 <Box shrink={false} direction="row" gap="xs" align="center">
                   <Text muted size="xs">
-                    <RelativeTime at={row.updatedAt} format="duration" />
+                    {/* 外の Text の muted は効かないので、ここにも付ける */}
+                    <RelativeTime at={row.updatedAt} format="duration" muted />
                   </Text>
                 </Box>
               </Row>
@@ -314,7 +315,11 @@ function Header({ state }: { state: PrsState }) {
     <Row justify="between" align="center" gap="xs">
       <Text size="xs" muted>
         {state.fetchedAt === null ? 'Not updated yet' : 'Updated '}
-        {state.fetchedAt === null ? null : <RelativeTime at={state.fetchedAt} />}
+        {/* 既定の形は Orca の言語で出て、英語の文と混ざる。duration はどの言語でも 6s のように出る */}
+        {state.fetchedAt === null ? null : (
+          <RelativeTime at={state.fetchedAt} format="duration" muted />
+        )}
+        {state.fetchedAt === null ? null : ' ago'}
       </Text>
       {state.fetching ? (
         <Spinner label="Updating" labelHidden />
