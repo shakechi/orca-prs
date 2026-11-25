@@ -45,20 +45,23 @@ gh auth status
 
 ### 2. Add the plugin
 
-In Orca:
+PRs is in the Orca community catalog ([directory page](https://orca.dev/plugins/shakechi/orca-prs)). In Orca:
 
 1. Open **Settings → Plugins**. If plugins are off, turn them on first.
-2. Choose **Add plugin → From a Git URL…**.
-3. Paste `https://github.com/shakechi/orca-prs` and continue.
-4. Read the access it asks for (see [Access and privacy](#access-and-privacy)), then press **Install & enable**.
+2. Search for `PRs` and press **Review & install** on the one published by shakechi.
+3. Read the access it asks for (see [Access and privacy](#access-and-privacy)), then press **Install & enable**.
+
+If PRs does not show up, choose **⋯ → Catalog sources…** and add `https://github.com/stablyai/orca-community-plugins.git` with the ref `main`.
 
 Or in a terminal:
 
 ```sh
-orca plugin install shakechi/orca-prs
+orca plugin install shakechi.prs --catalog community
 ```
 
 This first run installs nothing. It prints the access the plugin asks for and a command that ends with `--approve` and a fingerprint. Run that command to install.
+
+To install from this repository instead, choose **Add plugin → From a Git URL…** and paste `https://github.com/shakechi/orca-prs`, or run `orca plugin install shakechi/orca-prs`. A plugin installed this way is not updated automatically.
 
 ### 3. Open the panel
 
@@ -136,7 +139,7 @@ Filters apply to every state in **My PRs** and are remembered. They do not apply
 
 ### Updates
 
-While the panel is visible, it fetches again when the data is more than five minutes old. Press the button at the top right to fetch now. It reads up to the 200 most recently updated pull requests per search and tells you how many it left out.
+While the panel is visible, it checks about once a minute and fetches again when the data is more than five minutes old. Right after you open a panel that was hidden for a while, it can show old data until that check. Press the button at the top right to fetch now. It reads up to the 200 most recently updated pull requests per search and tells you how many it left out.
 
 ## Settings
 
@@ -172,6 +175,8 @@ Open **Settings → Plugins → PRs**.
 `orca plugin logs shakechi.prs` shows what the worker recorded.
 
 ## Update and uninstall
+
+A plugin installed from the catalog is updated automatically while **Update plugins automatically** is on, which is the default. To update or uninstall it yourself:
 
 ```sh
 orca plugin update shakechi.prs
