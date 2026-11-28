@@ -139,7 +139,7 @@ Filters apply to every state in **My PRs** and are remembered. They do not apply
 
 ### Updates
 
-While the panel is visible, it checks about once a minute and fetches again when the data is more than five minutes old. Right after you open a panel that was hidden for a while, it can show old data until that check. Press the button at the top right to fetch now. It reads up to the 200 most recently updated pull requests per search and tells you how many it left out.
+When the panel opens or becomes visible again, and about once a minute while it stays visible, it fetches again if the data is more than five minutes old. Press the button at the top right to fetch now. It reads up to the 200 most recently updated pull requests per search and tells you how many it left out.
 
 ## Settings
 

@@ -220,6 +220,46 @@ test('開いたときは古ければ取り、ボタンを押したときは必�
   await close()
 })
 
+test('隠れていたパネルが見えるようになったら、すぐに確かめる', async () => {
+  const { view, asked, close } = await open()
+  assert.deepEqual(asked, [300_000])
+
+  await view.setVisible(false)
+  await view.settled()
+  assert.deepEqual(asked, [300_000])
+
+  await view.setVisible(true)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  await view.settled()
+  assert.deepEqual(asked, [300_000, 300_000])
+
+  // 見えたまま描き直しても、頼み直さない
+  await view.rerender()
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  assert.deepEqual(asked, [300_000, 300_000])
+  await close()
+})
+
+test('隠れたまま開いたパネルも、見えたときに確かめる', async () => {
+  const asked: number[] = []
+  const host = mockHost({
+    requests: {
+      'prs.get': () => ready(),
+      'prs.refresh': ({ maxAgeMs }: { maxAgeMs: number }) => {
+        asked.push(maxAgeMs)
+        return ready()
+      },
+    },
+  })
+  const view = await mount(panel, { host, visible: false })
+  assert.deepEqual(asked, [300_000])
+  await view.setVisible(true)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  await view.settled()
+  assert.deepEqual(asked, [300_000, 300_000])
+  await view.unmount()
+})
+
 test('ワーカーが知らせてきたら、出し直す', async () => {
   const { view, shows, close } = await open()
   await view.post('prs.changed', ready({ mine: [row('one-1', 'merge')] }))

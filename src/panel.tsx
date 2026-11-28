@@ -20,6 +20,7 @@ import {
   ListItem,
   type PanelContext,
   plugin,
+  type ReadonlyAtom,
   RelativeTime,
   Row,
   read,
@@ -174,7 +175,28 @@ async function openInBrowser(url: string): Promise<void> {
   }
 }
 
+/** パネルが見えているか。setup で受け取る。 */
+let visibility: ReadonlyAtom<boolean> | null = null
+let wasVisible = false
+
+/**
+ * 隠れていたパネルが見えるようになったら、すぐに確かめる。描画のたびに呼ぶ。
+ * サイドバーを閉じたりウィンドウを隠したりしてもパネルは動き続けるので、
+ * 開き直しても setup は走らず、1 分おきの確認を待つと古い表示が残る。
+ * 描画の中で読むと、見え方が変わるたびに描き直されるので、変わり目に気づける。
+ */
+function noticeVisibility(): void {
+  if (visibility === null) return
+  const visible = read(visibility)
+  // 描画の中では頼めないので、描き終わったあとに頼む
+  if (visible && !wasVisible) setTimeout(() => void refresh(MAX_AGE_MS), 0)
+  wasVisible = visible
+}
+
 export function setup(ctx: PanelContext): () => void {
+  visibility = ctx.visible
+  // 開いたときの確認は、このあとすぐに頼む
+  wasVisible = read(ctx.visible)
   ctx.subscriptions.push(plugin.on('prs.changed', receive))
   // ワーカーが前に取ったものがあれば、先に出す
   plugin
@@ -364,6 +386,7 @@ function Header({ state }: { state: PrsState }) {
 }
 
 export default function PrsPanel() {
+  noticeVisibility()
   const state = read(prs)
   const failed = read(failure)
   const notOpened = read(openFailure)
