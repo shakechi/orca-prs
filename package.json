@@ -1,6 +1,6 @@
 {
   "name": "orca-prs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Orca のプラグイン。自分の PR と、自分に来ているレビュー依頼を、状態ごとにサイドバーへ出す",
   "license": "MIT",

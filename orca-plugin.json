@@ -2,7 +2,7 @@
   "manifestVersion": 2,
   "id": "prs",
   "name": "PRs",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Shows your pull requests and the reviews requested from you, grouped by what to do next. Reads GitHub through the gh command.",
   "engines": {
     "orca": ">=1.4.259"
